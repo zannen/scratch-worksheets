@@ -1,0 +1,150 @@
+<!doctype html>
+<!--
+  Renders Scratch blocks to SVG with scratch-blocks, for worksheet.py.
+
+  Load as render.html?job=<path to job.json>. The job lists variables, dropdown
+  menu options and one Blockly XML snippet per block. When finished, the
+  #result textarea holds JSON: {"blocks": {key: svg}, "errors": {key: message}}.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* Match the font Scratch uses, so blocks are measured as they will be printed. */
+  .blocklyText { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 12pt; font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="workspace" style="width: 2000px; height: 2000px"></div>
+<textarea id="result">pending</textarea>
+<script type="module">
+const result = document.getElementById('result');
+
+// Block colours, as set by the Scratch editor (scratch-blocks itself has none).
+function style(primary, secondary, tertiary) {
+  return {colourPrimary: primary, colourSecondary: secondary, colourTertiary: tertiary, colourQuaternary: tertiary};
+}
+const BLOCK_STYLES = {
+  motion: style('#4C97FF', '#4280D7', '#3373CC'),
+  looks: style('#9966FF', '#855CD6', '#774DCB'),
+  sounds: style('#CF63CF', '#C94FC9', '#BD42BD'),
+  event: style('#FFBF00', '#E6AC00', '#CC9900'),
+  control: style('#FFAB19', '#EC9C13', '#CF8B17'),
+  sensing: style('#5CB1D6', '#47A8D1', '#2E8EB8'),
+  operators: style('#59C059', '#46B946', '#389438'),
+  data: style('#FF8C1A', '#FF8000', '#DB6E00'),
+  data_lists: style('#FF661A', '#FF5500', '#E64D00'),
+  more: style('#FF6680', '#FF4D6A', '#FF3355'),
+  pen: style('#0FBD8C', '#0DA57A', '#0B8E69'),
+  textField: style('#FFFFFF', '#FFFFFF', '#FFFFFF'),
+};
+
+// Menus that the Scratch editor defines at run time. Their options come from the job.
+const MENUS = {
+  motion_goto_menu: ['TO', 'motion'],
+  motion_glideto_menu: ['TO', 'motion'],
+  motion_pointtowards_menu: ['TOWARDS', 'motion'],
+  looks_costume: ['COSTUME', 'looks'],
+  looks_backdrops: ['BACKDROP', 'looks'],
+  sound_sounds_menu: ['SOUND_MENU', 'sounds'],
+  control_create_clone_of_menu: ['CLONE_OPTION', 'control'],
+  sensing_touchingobjectmenu: ['TOUCHINGOBJECTMENU', 'sensing'],
+  sensing_distancetomenu: ['DISTANCETOMENU', 'sensing'],
+  sensing_of_object_menu: ['OBJECT', 'sensing'],
+  pen_menu_colorParam: ['colorParam', 'pen'],
+};
+
+function options(job, type) {
+  const found = job.menus[type];
+  return found && found.length ? found : [['', '']];
+}
+
+function defineEditorBlocks(SB, job, penIcon) {
+  const definitions = [];
+  for (const [type, [field, category]] of Object.entries(MENUS)) {
+    definitions.push({
+      type,
+      message0: '%1',
+      args0: [{type: 'field_dropdown', name: field, options: options(job, type)}],
+      output: 'String',
+      outputShape: 2,
+      extensions: ['colours_' + category],
+    });
+  }
+  definitions.push({
+    type: 'event_whenbackdropswitchesto',
+    message0: 'when backdrop switches to %1',
+    args0: [{type: 'field_dropdown', name: 'BACKDROP', options: options(job, 'event_whenbackdropswitchesto')}],
+    extensions: ['colours_event', 'shape_hat'],
+  });
+  definitions.push({
+    type: 'sensing_of',
+    message0: '%1 of %2',
+    args0: [
+      {type: 'field_dropdown', name: 'PROPERTY', options: options(job, 'sensing_of')},
+      {type: 'input_value', name: 'OBJECT'},
+    ],
+    output: true,
+    outputShape: 2,
+    extensions: ['colours_sensing'],
+  });
+
+  // Pen extension blocks, as scratch-vm describes them.
+  const pen = (type, text, args = [], shape = 'shape_statement') => definitions.push({
+    type,
+    message0: '%1 %2',
+    args0: [
+      {type: 'field_image', src: penIcon, width: 40, height: 40},
+      {type: 'field_vertical_separator'},
+    ],
+    message1: text,
+    args1: args,
+    extensions: ['colours_pen', shape, 'scratch_extension'],
+  });
+  const value = name => ({type: 'input_value', name});
+  pen('pen_clear', 'erase all');
+  pen('pen_stamp', 'stamp');
+  pen('pen_penDown', 'pen down');
+  pen('pen_penUp', 'pen up');
+  pen('pen_setPenColorToColor', 'set pen color to %1', [value('COLOR')]);
+  pen('pen_changePenColorParamBy', 'change pen %1 by %2', [value('COLOR_PARAM'), value('VALUE')]);
+  pen('pen_setPenColorParamTo', 'set pen %1 to %2', [value('COLOR_PARAM'), value('VALUE')]);
+  pen('pen_changePenSizeBy', 'change pen size by %1', [value('SIZE')]);
+  pen('pen_setPenSizeTo', 'set pen size to %1', [value('SIZE')]);
+
+  SB.defineBlocksWithJsonArray(definitions);
+}
+
+try {
+  const SB = await import('../vendor/scratch-blocks-2.1.30.mjs');
+  const job = await (await fetch(new URLSearchParams(location.search).get('job'))).json();
+  const penIcon = 'data:image/svg+xml;base64,' + btoa(await (await fetch('pen-icon.svg')).text());
+
+  SB.ScratchMsgs.setLocale('en');
+  defineEditorBlocks(SB, job, penIcon);
+  const theme = SB.Theme.defineTheme('scratch_worksheet', {base: SB.Themes.Classic, blockStyles: BLOCK_STYLES});
+  const workspace = SB.inject('workspace', {media: '../media/', theme, scrollbars: false, zoom: {startScale: 1}});
+
+  for (const variable of job.variables) {
+    workspace.createVariable(variable.name, variable.type, variable.id);
+  }
+
+  const blocks = {};
+  const errors = {};
+  for (const {key, xml} of job.blocks) {
+    try {
+      const block = SB.Xml.domToBlock(SB.utils.xml.textToDom(xml), workspace);
+      SB.renderManagement.triggerQueuedRenders();
+      blocks[key] = block.getSvgRoot().outerHTML;
+      block.dispose(false);
+    } catch (error) {
+      errors[key] = String(error);
+    }
+  }
+  result.textContent = JSON.stringify({blocks, errors});
+} catch (error) {
+  result.textContent = JSON.stringify({fatal: String(error) + '\n' + error.stack});
+}
+</script>
+</body>
+</html>
