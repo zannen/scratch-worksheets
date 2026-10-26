@@ -4,7 +4,12 @@
 // zipped up first), this loads the page, gives it the file as if it was uploaded,
 // fills in the title and instructions from the app's .md file (if any), checks the
 // blocks were drawn the same size as the original Python program drew them, and
-// prints the worksheet to a PDF in build/e2e/<browser>/.
+// prints the worksheet to a PDF in build/e2e/<browser>/. It also loads the apps in
+// SCRATCH_PROJECTS from their links on the Scratch website, which needs the internet
+// (set E2E_OFFLINE=1 to skip that).
+//
+// The page is served by a test server like `make web-test`, or set E2E_URL to test
+// a real deployment, e.g. E2E_URL=https://www.example.org/scratch2worksheet/.
 //
 //     node tests/e2e.mjs                    # both browsers; or: make e2e-test
 //     node tests/e2e.mjs firefox            # one browser
@@ -23,13 +28,32 @@ const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const WEB = join(ROOT, 'web');
 const APPS = join(ROOT, 'apps');
 const OUT = join(ROOT, 'build', 'e2e');
+// Apps in apps/ that are also shared on the Scratch website.
+const SCRATCH_PROJECTS = {RandomWalk: {link: 'https://scratch.mit.edu/projects/1394156249/', title: 'Random Walk'}};
 const MIME_TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml'};
 
 // --- A static web server for web/ -------------------------------------------
 
+/** Forward a request to the Scratch API, as the real web server's proxy does. */
+async function proxyScratchApi(id, response) {
+  try {
+    const reply = await fetch(`https://api.scratch.mit.edu/projects/${id}`);
+    response.writeHead(reply.status, {'Content-Type': reply.headers.get('Content-Type') || 'application/json'});
+    response.end(Buffer.from(await reply.arrayBuffer()));
+  } catch (error) {
+    response.writeHead(502).end(String(error));
+  }
+}
+
 function serve() {
   const server = createServer((request, response) => {
-    const path = join(WEB, decodeURIComponent(new URL(request.url, 'http://x').pathname));
+    const pathname = new URL(request.url, 'http://x').pathname;
+    const api = pathname.match(/^\/scratch-api\/projects\/(\d+)\/?$/);
+    if (api) {
+      proxyScratchApi(api[1], response);
+      return;
+    }
+    const path = join(WEB, decodeURIComponent(pathname));
     const file = path.endsWith('/') ? join(path, 'index.html') : path;
     if (relative(WEB, file).startsWith('..') || !existsSync(file) || !statSync(file).isFile()) {
       response.writeHead(404).end();
@@ -54,19 +78,26 @@ async function waitFor(evaluate, expression, what, timeout = 60_000) {
 
 // --- The apps ---------------------------------------------------------------
 
-/** Each app in apps/ as {name, bytes} of a .sb3 file. */
+/** Each app in apps/ as {name, fixture, bytes} of a .sb3 file, then the apps that
+ * are on the Scratch website as {name, fixture, link, title}. */
 function findApps() {
   const apps = [];
   for (const entry of readdirSync(APPS).sort()) {
     const path = join(APPS, entry);
     if (entry.endsWith('.sb3')) {
-      apps.push({name: entry.slice(0, -4), bytes: readFileSync(path)});
+      const name = entry.slice(0, -4);
+      apps.push({name, fixture: name, bytes: readFileSync(path)});
     } else if (existsSync(join(path, 'project.json')) && !existsSync(`${path}.sb3`)) {
       const files = {};
       for (const file of readdirSync(path)) {
         files[`${entry}/${file}`] = new Uint8Array(readFileSync(join(path, file)));
       }
-      apps.push({name: entry, bytes: zipSync(files)});
+      apps.push({name: entry, fixture: entry, bytes: zipSync(files)});
+    }
+  }
+  if (!process.env.E2E_OFFLINE) {
+    for (const [fixture, project] of Object.entries(SCRATCH_PROJECTS)) {
+      apps.push({name: `${fixture}-link`, fixture, ...project});
     }
   }
   return apps;
@@ -159,21 +190,39 @@ function setScale(page, value) {
   })()`);
 }
 
-async function checkApp(page, browserName, {name, bytes}, level, out) {
+/**
+ * @param app {name, fixture, bytes} for a .sb3 file, or {name, fixture, link, title}
+ *   for a project on the Scratch website; fixture names the app's files in apps/
+ *   and tests/fixtures/
+ */
+async function checkApp(page, browserName, app, level, out) {
+  const {name, fixture} = app;
   await waitFor(page.evaluate, `document.readyState === 'complete' && !!document.getElementById('file')`, 'the page');
 
-  const notes = readNotes(name);
+  // From a link, the title comes from the Scratch website.
+  const notes = readNotes(fixture);
   await page.evaluate(`(() => {
-    document.getElementById('title').value = ${JSON.stringify(notes.title)};
+    document.getElementById('title').value = ${JSON.stringify(app.link ? '' : notes.title)};
     document.getElementById('instructions').value = ${JSON.stringify(notes.instructions)};
     document.getElementById('level').value = ${JSON.stringify(level)};
-    const bytes = Uint8Array.from(atob(${JSON.stringify(Buffer.from(bytes).toString('base64'))}), c => c.charCodeAt(0));
-    const transfer = new DataTransfer();
-    transfer.items.add(new File([bytes], ${JSON.stringify(name + '.sb3')}));
-    const input = document.getElementById('file');
-    input.files = transfer.files;
-    input.dispatchEvent(new Event('change'));
   })()`);
+  if (app.link) {
+    await page.evaluate(`(() => {
+      document.getElementById('tab-link').click();
+      document.getElementById('link').value = ${JSON.stringify(app.link)};
+      document.getElementById('link-load').click();
+    })()`);
+  } else {
+    await page.evaluate(`(() => {
+      document.getElementById('tab-file').click();
+      const bytes = Uint8Array.from(atob(${JSON.stringify(Buffer.from(app.bytes).toString('base64'))}), c => c.charCodeAt(0));
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([bytes], ${JSON.stringify(fixture + '.sb3')}));
+      const input = document.getElementById('file');
+      input.files = transfer.files;
+      input.dispatchEvent(new Event('change'));
+    })()`);
+  }
   const ready = `!document.getElementById('print').disabled || document.getElementById('status').classList.contains('error')`;
   await waitFor(page.evaluate, ready, 'the worksheet');
   const statusText = await page.evaluate(`document.getElementById('status').textContent`);
@@ -186,7 +235,24 @@ async function checkApp(page, browserName, {name, bytes}, level, out) {
   const sizes = await page.evaluate(`[...document.querySelectorAll('#content .blocks svg')]
     .map(svg => [Number(svg.getAttribute('width')), Number(svg.getAttribute('height'))])`);
   await setScale(page, '');
-  const sizeCheck = checkSizes(name, sizes, SIZE_TOLERANCE[browserName]);
+  const sizeCheck = checkSizes(fixture, sizes, SIZE_TOLERANCE[browserName]);
+  // An empty title is filled in (so it can be edited), and typed-in text is kept.
+  const inputs = await page.evaluate(`({title: document.getElementById('title').value,
+    instructions: document.getElementById('instructions').value})`);
+  const expectedTitle = app.link ? app.title : notes.title;
+  if (inputs.title !== expectedTitle || (notes.instructions && inputs.instructions !== notes.instructions)) {
+    throw new Error(`${name}: the title or instructions are not as expected: ${JSON.stringify(inputs)}`);
+  }
+  if (app.title) {
+    const heading = await page.evaluate(`document.querySelector('#content h1').textContent`);
+    if (heading !== app.title) {
+      throw new Error(`${name}: the title is ${JSON.stringify(heading)}, not ${JSON.stringify(app.title)}`);
+    }
+  }
+  const pictures = await page.evaluate(`document.querySelectorAll('#content h2 img').length`);
+  if (pictures !== await page.evaluate(`document.querySelectorAll('#content h2').length`)) {
+    throw new Error(`${name}: some sprites have no picture`);
+  }
 
   // The level: in a round badge, in the top-right corner of the page's content.
   const badge = await page.evaluate(`(() => {
@@ -238,8 +304,9 @@ async function main() {
   if (!apps.length) {
     throw new Error('no apps found in apps/');
   }
-  const server = await serve();
-  const url = `http://127.0.0.1:${server.address().port}/`;
+  const server = process.env.E2E_URL ? null : await serve();
+  const url = process.env.E2E_URL || `http://127.0.0.1:${server.address().port}/`;
+  console.log(`testing ${url}`);
   const failures = [];
   try {
     for (const name of browsers) {
@@ -268,7 +335,7 @@ async function main() {
       }
     }
   } finally {
-    server.close();
+    server?.close();
   }
   if (failures.length) {
     console.error(`failed: ${failures.join(', ')}`);

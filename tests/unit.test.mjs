@@ -32,23 +32,23 @@ for (const name of ['RandomWalk', 'SpinningTree']) {
 test('a project folder zipped up is read like a .sb3 file', () => {
   const project = read('apps/SpinningTree/project.json');
   const bytes = zipSync({'Spinning Tree/project.json': strToU8(project), 'Spinning Tree/a.svg': strToU8('<svg/>')});
-  const app = new App('Spinning Tree', bytes);
+  const app = App.fromSb3('Spinning Tree', bytes);
   assert.equal(app.prefix, 'Spinning Tree/');
   assert.deepEqual(app.project, JSON.parse(project));
 });
 
 test('a file without project.json is rejected', () => {
   const bytes = zipSync({'hello.txt': strToU8('hi')});
-  assert.throws(() => new App('x', bytes), /no project.json/);
+  assert.throws(() => App.fromSb3('x', bytes), /no project.json/);
 });
 
 test('a file that is not a zip file is rejected', () => {
-  assert.throws(() => new App('x', strToU8('not a zip file')), /is it a Scratch .sb3 file/);
+  assert.throws(() => App.fromSb3('x', strToU8('not a zip file')), /is it a Scratch .sb3 file/);
 });
 
 test('costume pictures become data URIs', () => {
   const bytes = zipSync({'project.json': strToU8('{"targets": []}'), 'abc.svg': strToU8('<svg/>')});
-  const app = new App('x', bytes);
+  const app = App.fromSb3('x', bytes);
   const target = {costumes: [{assetId: 'abc', md5ext: 'abc.svg', dataFormat: 'svg'}], currentCostume: 0};
   assert.equal(app.costumeDataUri(target), 'data:image/svg+xml;base64,' + btoa('<svg/>'));
   assert.equal(app.costumeDataUri({costumes: []}), null);

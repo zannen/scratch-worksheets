@@ -4,6 +4,7 @@
 //     const page = await browser.open(url);
 //     await page.evaluate('document.title');      // any JSON-serialisable result
 //     const pdf = await page.print();              // a Buffer, printed on A4
+//     const png = await page.screenshot();         // a Buffer, of the whole page
 //     await page.close();
 //     await browser.close();
 //
@@ -124,6 +125,10 @@ class Chromium {
         const {data} = await this.send('Page.printToPDF', {preferCSSPageSize: true, printBackground: true}, sessionId);
         return Buffer.from(data, 'base64');
       },
+      screenshot: async () => {
+        const {data} = await this.send('Page.captureScreenshot', {captureBeyondViewport: true}, sessionId);
+        return Buffer.from(data, 'base64');
+      },
       close: () => this.send('Target.closeTarget', {targetId}),
     };
   }
@@ -192,6 +197,10 @@ class Firefox {
         const {data} = await this.send('browsingContext.print', {
           context, background: true, page: A4, margin: {top: 0, bottom: 0, left: 0, right: 0},
         });
+        return Buffer.from(data, 'base64');
+      },
+      screenshot: async () => {
+        const {data} = await this.send('browsingContext.captureScreenshot', {context, origin: 'document'});
         return Buffer.from(data, 'base64');
       },
       close: () => this.send('browsingContext.close', {context}),

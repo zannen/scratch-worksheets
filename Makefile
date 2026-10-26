@@ -4,11 +4,11 @@ PORT ?= 8080
 
 default: web-test
 
-# Serve the web app at http://localhost:8080/ (stop with Ctrl+C).
+# Serve the web app at http://localhost:8080/ (stop with Ctrl+C), with a proxy for
+# the Scratch API like the real web server's.
 .PHONY: web-test
 web-test:
-	@echo "Serving the web app at http://localhost:$(PORT)/"
-	@python3 -m http.server $(PORT) --bind 127.0.0.1 --directory web
+	@python3 tools/serve.py --port $(PORT)
 
 # Unit tests (needs Node.js).
 .PHONY: test
