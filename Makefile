@@ -15,11 +15,16 @@ web-test:
 test:
 	@node --test 'tests/*.test.mjs'
 
-# End-to-end test: make worksheets for the apps in apps/ in headless Chromium and
-# save them as PDFs in build/e2e/ (needs Node.js and Chromium).
+# End-to-end tests: make worksheets for the apps in apps/ in headless browsers and
+# save them as PDFs in build/e2e/<browser>/ (needs Node.js, Chromium, and Firefox
+# with geckodriver).
 .PHONY: e2e-test
 e2e-test:
-	@node tests/e2e.mjs
+	@node tests/e2e.mjs chromium firefox
+
+.PHONY: e2e-chromium e2e-firefox
+e2e-chromium e2e-firefox: e2e-%:
+	@node tests/e2e.mjs $*
 
 .PHONY: clean
 clean:

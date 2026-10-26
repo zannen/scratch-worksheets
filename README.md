@@ -13,7 +13,9 @@ page can be hosted as plain static files.
 
    ![Scratch's File menu, with "Save to your computer" highlighted](readme_images/scratch-save-to-computer.png)
 1. Open the web page and choose (or drop) the `sb3` file.
-1. Type a title (the default is the app's name) and the instructions. The
+1. Type a title (the default is the app's name), an optional level (e.g. `1`,
+   `5B` or `10`, up to 4 characters, shown in a circle in the top-right corner of
+   the worksheet), and the instructions. The
    instructions can use Markdown: paragraphs, `-` or `1.` lists, `**bold**`,
    `*italic*` and `## headings`.
 1. Optionally, use **Shuffle again** for a different order of blocks (the same
@@ -55,12 +57,14 @@ uses JavaScript modules, so it must be served over HTTP(S); opening
 
 - `make web-test` serves the page at <http://localhost:8080/> (needs Python 3).
 - `make test` runs the unit tests (needs Node.js).
-- `make e2e-test` makes a worksheet for each app in `apps/` in headless Chromium,
-  checks the blocks, and saves the PDFs in `build/e2e/` (needs Node.js and
-  Chromium; set `CHROMIUM` to use another browser binary). An app is a `.sb3`
-  file or a folder containing `project.json`; its title and instructions come
-  from a Markdown file of the same name, e.g. `apps/RandomWalk.md`, whose first
-  `# ` heading is the title.
+- `make e2e-test` makes a worksheet for each app in `apps/` in headless Chromium
+  and headless Firefox, checks the blocks and the level circle, and saves the PDFs
+  in `build/e2e/<browser>/` (needs Node.js, Chromium, and Firefox with
+  [geckodriver](https://github.com/mozilla/geckodriver)). `make e2e-chromium` and
+  `make e2e-firefox` test one browser. Set `CHROMIUM`, `FIREFOX` or `GECKODRIVER`
+  to use other browser binaries. An app is a `.sb3` file or a folder containing
+  `project.json`; its title and instructions come from a Markdown file of the same
+  name, e.g. `apps/RandomWalk.md`, whose first `# ` heading is the title.
 
 The fixtures in `tests/fixtures/` were made by the original Python version of this
 program, which the web page replaces, so the tests check the page splits blocks,
