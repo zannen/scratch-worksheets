@@ -48,6 +48,23 @@ function defaultInstructions() {
   return DEFAULT_INSTRUCTIONS + (sprites ? DEFAULT_INSTRUCTIONS_SPRITES : '');
 }
 
+// The text last filled in for each input, so it can be replaced for the next app.
+const filledIn = new Map();
+
+/**
+ * Fill in the title and instructions for a newly loaded app, so they can be edited.
+ * Text typed in by the user is kept: an input is only filled in if it is empty or
+ * still holds the text filled in for the previous app.
+ */
+function fillInDefaults() {
+  for (const [input, value] of [[titleInput, current.name], [instructionsInput, defaultInstructions()]]) {
+    if (!input.value.trim() || input.value === filledIn.get(input)) {
+      input.value = value;
+      filledIn.set(input, value);
+    }
+  }
+}
+
 /** Split and draw an app's blocks. */
 async function prepareApp(app) {
   const targets = sections(app.project);
@@ -100,6 +117,7 @@ async function load(description, readApp) {
     return; // something else was loaded meanwhile
   }
   current = app;
+  fillInDefaults();
   newSeed();
   await update();
 }

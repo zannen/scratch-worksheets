@@ -236,6 +236,13 @@ async function checkApp(page, browserName, app, level, out) {
     .map(svg => [Number(svg.getAttribute('width')), Number(svg.getAttribute('height'))])`);
   await setScale(page, '');
   const sizeCheck = checkSizes(fixture, sizes, SIZE_TOLERANCE[browserName]);
+  // An empty title is filled in (so it can be edited), and typed-in text is kept.
+  const inputs = await page.evaluate(`({title: document.getElementById('title').value,
+    instructions: document.getElementById('instructions').value})`);
+  const expectedTitle = app.link ? app.title : notes.title;
+  if (inputs.title !== expectedTitle || (notes.instructions && inputs.instructions !== notes.instructions)) {
+    throw new Error(`${name}: the title or instructions are not as expected: ${JSON.stringify(inputs)}`);
+  }
   if (app.title) {
     const heading = await page.evaluate(`document.querySelector('#content h1').textContent`);
     if (heading !== app.title) {
