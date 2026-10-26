@@ -1,0 +1,10 @@
+{
+ "RandomWalk": {
+  "text": "# Random Walk\n\nRearrange the blocks so that:\n\n- when the green flag is clicked, the screen is cleared, the cat goes to the origin (x=0, y=0).\n- when Space is clicked, the cat goes to a random screen position, leaving a line drawn behind it\n- when the cat is clicked, it glides back to the origin, then does one full 360 degree turn to the right.\n",
+  "html": "<h3>Random Walk</h3>\n<p>Rearrange the blocks so that:</p>\n<ul><li>when the green flag is clicked, the screen is cleared, the cat goes to the origin (x=0, y=0).</li><li>when Space is clicked, the cat goes to a random screen position, leaving a line drawn behind it</li><li>when the cat is clicked, it glides back to the origin, then does one full 360 degree turn to the right.</li></ul>"
+ },
+ "tricky": {
+  "text": "Intro with **bold**, __bold__, *italic*, _italic_, `code` and <tags> & ampersands.\nsecond line of the same paragraph\n\n- item one\n  continued here\n* item two with snake_case_name and 2*3*4\n1. first\n2) second\n## A heading ##\nplain para after heading\n+ plus bullet\n\n**bold at start** of a line\nÜnïcode_wörd_ and _ünï_",
+  "html": "<p>Intro with <strong>bold</strong>, <strong>bold</strong>, <em>italic</em>, <em>italic</em>, <code>code</code> and &lt;tags&gt; &amp; ampersands. second line of the same paragraph</p>\n<ul><li>item one continued here</li><li>item two with snake_case_name and 2*3*4</li></ul>\n<ol><li>first</li><li>second</li></ol>\n<h3>A heading</h3>\n<p>plain para after heading</p>\n<ul><li>plus bullet</li></ul>\n<p><strong>bold at start</strong> of a line Ünïcode_wörd_ and <em>ünï</em></p>"
+ }
+}

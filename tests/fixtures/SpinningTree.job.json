@@ -1,0 +1,43 @@
+{
+ "variables": [
+  {
+   "id": "T-1JRMU?6@_!Y(r`jy6Q",
+   "name": "spinning",
+   "type": ""
+  },
+  {
+   "id": ":p`Lcq@x9~~tWULdFn6U",
+   "name": "do the thing",
+   "type": "broadcast_msg"
+  }
+ ],
+ "menus": {},
+ "targets": [
+  {
+   "name": "Button2",
+   "pieces": [
+    "<block type=\"event_whenthisspriteclicked\"></block>",
+    "<block type=\"event_broadcast\"><value name=\"BROADCAST_INPUT\"><shadow type=\"event_broadcast_menu\"><field name=\"BROADCAST_OPTION\" id=\":p`Lcq@x9~~tWULdFn6U\" variabletype=\"broadcast_msg\">do the thing</field></shadow></value></block>",
+    "<block type=\"data_setvariableto\"><field name=\"VARIABLE\" id=\"T-1JRMU?6@_!Y(r`jy6Q\" variabletype=\"\">spinning</field><value name=\"VALUE\"><shadow type=\"text\"><field name=\"TEXT\">1</field></shadow></value></block>",
+    "<block type=\"control_if_else\"></block>",
+    "<block type=\"operator_equals\"><value name=\"OPERAND1\"><shadow type=\"text\"><field name=\"TEXT\"></field></shadow></value><value name=\"OPERAND2\"><shadow type=\"text\"><field name=\"TEXT\">0</field></shadow></value></block>",
+    "<block type=\"data_setvariableto\"><field name=\"VARIABLE\" id=\"T-1JRMU?6@_!Y(r`jy6Q\" variabletype=\"\">spinning</field><value name=\"VALUE\"><shadow type=\"text\"><field name=\"TEXT\">0</field></shadow></value></block>",
+    "<block type=\"data_variable\"><field name=\"VARIABLE\" id=\"T-1JRMU?6@_!Y(r`jy6Q\" variabletype=\"\">spinning</field></block>"
+   ]
+  },
+  {
+   "name": "Tree1",
+   "pieces": [
+    "<block type=\"event_whenbroadcastreceived\"><field name=\"BROADCAST_OPTION\" id=\":p`Lcq@x9~~tWULdFn6U\" variabletype=\"broadcast_msg\">do the thing</field></block>",
+    "<block type=\"motion_turnright\"><value name=\"DEGREES\"><shadow type=\"math_number\"><field name=\"NUM\">6</field></shadow></value></block>",
+    "<block type=\"control_wait\"><value name=\"DURATION\"><shadow type=\"math_positive_number\"><field name=\"NUM\">0.1</field></shadow></value></block>",
+    "<block type=\"event_whenflagclicked\"></block>",
+    "<block type=\"motion_pointindirection\"><value name=\"DIRECTION\"><shadow type=\"math_angle\"><field name=\"NUM\">90</field></shadow></value></block>",
+    "<block type=\"control_repeat_until\"></block>",
+    "<block type=\"operator_equals\"><value name=\"OPERAND1\"><shadow type=\"text\"><field name=\"TEXT\"></field></shadow></value><value name=\"OPERAND2\"><shadow type=\"text\"><field name=\"TEXT\">0</field></shadow></value></block>",
+    "<block type=\"data_setvariableto\"><field name=\"VARIABLE\" id=\"T-1JRMU?6@_!Y(r`jy6Q\" variabletype=\"\">spinning</field><value name=\"VALUE\"><shadow type=\"text\"><field name=\"TEXT\">0</field></shadow></value></block>",
+    "<block type=\"data_variable\"><field name=\"VARIABLE\" id=\"T-1JRMU?6@_!Y(r`jy6Q\" variabletype=\"\">spinning</field></block>"
+   ]
+  }
+ ]
+}
