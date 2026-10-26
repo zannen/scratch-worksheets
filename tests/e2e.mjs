@@ -1,27 +1,28 @@
-// End-to-end test of the web app in headless Chromium.
+// End-to-end test of the web app in headless Chromium and Firefox.
 //
 // For each app in apps/ (a .sb3 file, or a folder containing project.json, which is
 // zipped up first), this loads the page, gives it the file as if it was uploaded,
 // fills in the title and instructions from the app's .md file (if any), checks the
 // blocks were drawn the same size as the original Python program drew them, and
-// prints the worksheet to a PDF in build/e2e/.
+// prints the worksheet to a PDF in build/e2e/<browser>/.
 //
-//     node tests/e2e.mjs            # or: make e2e-test
-//     CHROMIUM=google-chrome node tests/e2e.mjs
+//     node tests/e2e.mjs                    # both browsers; or: make e2e-test
+//     node tests/e2e.mjs firefox            # one browser
+//     CHROMIUM=google-chrome node tests/e2e.mjs chromium
+//     FIREFOX=/path/to/firefox GECKODRIVER=/path/to/geckodriver node tests/e2e.mjs firefox
 
-import {spawn} from 'node:child_process';
 import {existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {createServer} from 'node:http';
 import {extname, join, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {strToU8, zipSync} from '../web/vendor/fflate-0.8.3.mjs';
+import {unzlibSync, zipSync} from '../web/vendor/fflate-0.8.3.mjs';
 import {AUTO_SCALES} from '../web/js/layout.js';
+import {BROWSERS, launch} from './browsers.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const WEB = join(ROOT, 'web');
 const APPS = join(ROOT, 'apps');
 const OUT = join(ROOT, 'build', 'e2e');
-const CHROMIUM = process.env.CHROMIUM || 'chromium';
 const MIME_TYPES = {'.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml'};
 
 // --- A static web server for web/ -------------------------------------------
@@ -38,68 +39,6 @@ function serve() {
     response.end(readFileSync(file));
   });
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server)));
-}
-
-// --- Chromium, driven over the DevTools protocol --------------------------------
-
-function launchChromium() {
-  const child = spawn(CHROMIUM, [
-    '--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
-    '--remote-debugging-port=0', 'about:blank',
-  ], {stdio: ['ignore', 'ignore', 'pipe']});
-  return new Promise((resolve, reject) => {
-    let stderr = '';
-    child.on('error', reject);
-    child.on('exit', code => reject(new Error(`${CHROMIUM} exited (${code})\n${stderr}`)));
-    child.stderr.on('data', data => {
-      stderr += data;
-      const match = stderr.match(/DevTools listening on (ws:\S+)/);
-      if (match) {
-        resolve({child, url: match[1]});
-      }
-    });
-  });
-}
-
-class DevTools {
-  constructor(url) {
-    this.socket = new WebSocket(url);
-    this.nextId = 1;
-    this.pending = new Map();
-    this.socket.addEventListener('message', event => {
-      const message = JSON.parse(event.data);
-      const pending = this.pending.get(message.id);
-      if (pending) {
-        this.pending.delete(message.id);
-        message.error ? pending.reject(new Error(message.error.message)) : pending.resolve(message.result);
-      }
-    });
-    this.opened = new Promise((resolve, reject) => {
-      this.socket.addEventListener('open', resolve);
-      this.socket.addEventListener('error', reject);
-    });
-  }
-
-  send(method, params = {}, sessionId = undefined) {
-    const id = this.nextId++;
-    this.socket.send(JSON.stringify({id, method, params, sessionId}));
-    return new Promise((resolve, reject) => this.pending.set(id, {resolve, reject}));
-  }
-}
-
-async function openPage(devtools, url) {
-  const {targetId} = await devtools.send('Target.createTarget', {url});
-  const {sessionId} = await devtools.send('Target.attachToTarget', {targetId, flatten: true});
-  const evaluate = async (expression) => {
-    const {result, exceptionDetails} = await devtools.send(
-      'Runtime.evaluate', {expression, awaitPromise: true, returnByValue: true}, sessionId);
-    if (exceptionDetails) {
-      throw new Error(exceptionDetails.exception?.description || exceptionDetails.text);
-    }
-    return result.value;
-  };
-  const send = (method, params) => devtools.send(method, params, sessionId);
-  return {evaluate, send};
 }
 
 async function waitFor(evaluate, expression, what, timeout = 60_000) {
@@ -149,8 +88,12 @@ function readNotes(name) {
   return {title: match[1], instructions: lines.join('\n').trim()};
 }
 
+// How far block sizes may be from the Python program's, which drew them in Chromium.
+// Firefox measures some fields slightly differently (e.g. the key menu is 4px taller).
+const SIZE_TOLERANCE = {chromium: 1, firefox: 5};
+
 /** Compare block sizes with those the Python program drew (at an unknown scale). */
-function checkSizes(name, sizes) {
+function checkSizes(name, sizes, tolerance) {
   const fixture = join(ROOT, 'tests', 'fixtures', `${name}.sizes.json`);
   if (!existsSync(fixture)) {
     return 'no sizes to compare with';
@@ -169,14 +112,27 @@ function checkSizes(name, sizes) {
       best = {scale, error};
     }
   }
-  if (best.error > 1) {
+  if (best.error > tolerance) {
     throw new Error(`${name}: block sizes differ from the Python program's by up to ${best.error.toFixed(2)}px`);
   }
   return `block sizes match the Python program's to within ${best.error.toFixed(2)}px`;
 }
 
+/** Count the pages in a PDF. Some browsers (e.g. Firefox) compress the objects that
+ * describe the pages, so look inside compressed streams too. */
 function pdfPageCount(bytes) {
-  return (bytes.toString('latin1').match(/\/Type\s*\/Page\b/g) || []).length;
+  const text = bytes.toString('latin1');
+  const parts = [text];
+  for (const match of text.matchAll(/stream\r?\n/g)) {
+    const start = match.index + match[0].length;
+    const end = text.indexOf('endstream', start);
+    try {
+      parts.push(Buffer.from(unzlibSync(bytes.subarray(start, end))).toString('latin1'));
+    } catch {
+      // not compressed, or not with zlib
+    }
+  }
+  return parts.reduce((count, part) => count + (part.match(/\/Type\s*\/Page\b/g) || []).length, 0);
 }
 
 // --- The test ---------------------------------------------------------------
@@ -184,9 +140,26 @@ function pdfPageCount(bytes) {
 // Levels to show on the worksheets, to try one, two and three characters.
 const LEVELS = ['5B', '7', '10A'];
 
-async function testApp(devtools, url, {name, bytes}, level) {
-  const page = await openPage(devtools, url);
-  await page.send('Page.enable');
+async function testApp(browser, url, app, level, out) {
+  const page = await browser.open(url);
+  try {
+    await checkApp(page, browser.name, app, level, out);
+  } finally {
+    await page.close();
+  }
+}
+
+/** Set the block size, and wait for the worksheet to be laid out again. */
+function setScale(page, value) {
+  return page.evaluate(`(async () => {
+    const select = document.getElementById('scale');
+    select.value = ${JSON.stringify(String(value))};
+    select.dispatchEvent(new Event('change'));
+    await new Promise(resolve => setTimeout(resolve, 300));
+  })()`);
+}
+
+async function checkApp(page, browserName, {name, bytes}, level, out) {
   await waitFor(page.evaluate, `document.readyState === 'complete' && !!document.getElementById('file')`, 'the page');
 
   const notes = readNotes(name);
@@ -209,38 +182,36 @@ async function testApp(devtools, url, {name, bytes}, level) {
   }
 
   // Block sizes at 100%, to compare with the Python program's.
-  const sizesAt100 = `(async () => {
-    const select = document.getElementById('scale');
-    const auto = select.value;
-    select.value = '1';
-    select.dispatchEvent(new Event('change'));
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const sizes = [...document.querySelectorAll('#content .blocks svg')]
-      .map(svg => [Number(svg.getAttribute('width')), Number(svg.getAttribute('height'))]);
-    select.value = auto;
-    select.dispatchEvent(new Event('change'));
-    await new Promise(resolve => setTimeout(resolve, 300));
-    return sizes;
-  })()`;
-  const sizeCheck = checkSizes(name, await page.evaluate(sizesAt100));
+  await setScale(page, 1);
+  const sizes = await page.evaluate(`[...document.querySelectorAll('#content .blocks svg')]
+    .map(svg => [Number(svg.getAttribute('width')), Number(svg.getAttribute('height'))])`);
+  await setScale(page, '');
+  const sizeCheck = checkSizes(name, sizes, SIZE_TOLERANCE[browserName]);
+
+  // The level: in a round badge, in the top-right corner of the page's content.
   const badge = await page.evaluate(`(() => {
     const badge = document.querySelector('#content .level');
     if (!badge) return null;
     const box = badge.getBoundingClientRect();
     const content = document.getElementById('content').getBoundingClientRect();
-    return {text: badge.textContent, top: box.top - content.top, right: content.right - box.right};
+    const style = getComputedStyle(badge);
+    return {text: badge.textContent, top: box.top - content.top, right: content.right - box.right,
+            width: box.width, height: box.height, radius: style.borderTopLeftRadius,
+            fits: badge.scrollWidth <= badge.clientWidth};
   })()`);
-  if (!badge || badge.text !== level || Math.abs(badge.top) > 1 || Math.abs(badge.right) > 1) {
-    throw new Error(`${name}: level ${level} is not in the top-right corner: ${JSON.stringify(badge)}`);
+  const badgeOk = badge && badge.text === level && Math.abs(badge.top) <= 1 && Math.abs(badge.right) <= 1 &&
+    Math.abs(badge.width - badge.height) <= 1 && badge.radius === '50%' && badge.fits;
+  if (!badgeOk) {
+    throw new Error(`${name}: level ${level} is not in a circle in the top-right corner: ${JSON.stringify(badge)}`);
   }
   const finalStatus = await page.evaluate(`document.getElementById('status').textContent`);
 
-  const {data} = await page.send('Page.printToPDF', {preferCSSPageSize: true, printBackground: true});
-  const pdf = Buffer.from(data, 'base64');
-  const pdfPath = join(OUT, `${name}.pdf`);
+  const pdf = await page.print();
+  const pdfPath = join(out, `${name}.pdf`);
   writeFileSync(pdfPath, pdf);
   const pages = pdfPageCount(pdf);
-  console.log(`${name}: ${finalStatus}\n  ${sizeCheck}\n  -> ${relative(ROOT, pdfPath)} (${pages} page(s))`);
+  console.log(`  ${name}: ${finalStatus}\n    ${sizeCheck}\n    level ${level} OK\n` +
+    `    -> ${relative(ROOT, pdfPath)} (${pages} page(s))`);
   if (pages !== 1) {
     throw new Error(`${name}: the PDF has ${pages} pages`);
   }
@@ -250,17 +221,11 @@ async function testApp(devtools, url, {name, bytes}, level) {
   const percent = Number(finalStatus.match(/block size (\d+)%/)[1]);
   const larger = AUTO_SCALES.filter(scale => Math.round(scale * 100) > percent).pop();
   if (larger) {
-    await page.evaluate(`(async () => {
-      const select = document.getElementById('scale');
-      select.value = '${larger}';
-      select.dispatchEvent(new Event('change'));
-      await new Promise(resolve => setTimeout(resolve, 300));
-    })()`);
-    const {data: largerData} = await page.send('Page.printToPDF', {preferCSSPageSize: true, printBackground: true});
-    const largerPdf = Buffer.from(largerData, 'base64');
-    writeFileSync(join(OUT, `${name}-larger.pdf`), largerPdf);
+    await setScale(page, larger);
+    const largerPdf = await page.print();
+    writeFileSync(join(out, `${name}-larger.pdf`), largerPdf);
     const largerPages = pdfPageCount(largerPdf);
-    console.log(`  at ${Math.round(larger * 100)}% it would print on ${largerPages} pages`);
+    console.log(`    at ${Math.round(larger * 100)}% it would print on ${largerPages} pages`);
     if (largerPages === 1) {
       throw new Error(`${name}: the blocks would fit on one page at ${Math.round(larger * 100)}%`);
     }
@@ -268,31 +233,45 @@ async function testApp(devtools, url, {name, bytes}, level) {
 }
 
 async function main() {
+  const browsers = process.argv.slice(2).length ? process.argv.slice(2) : BROWSERS;
   const apps = findApps();
   if (!apps.length) {
     throw new Error('no apps found in apps/');
   }
-  mkdirSync(OUT, {recursive: true});
   const server = await serve();
   const url = `http://127.0.0.1:${server.address().port}/`;
-  const {child, url: devtoolsUrl} = await launchChromium();
-  let failed = false;
+  const failures = [];
   try {
-    const devtools = new DevTools(devtoolsUrl);
-    await devtools.opened;
-    for (const [i, app] of apps.entries()) {
+    for (const name of browsers) {
+      console.log(`${name}:`);
+      const out = join(OUT, name);
+      mkdirSync(out, {recursive: true});
+      let browser;
       try {
-        await testApp(devtools, url, app, LEVELS[i % LEVELS.length]);
+        browser = await launch(name);
       } catch (error) {
-        console.error(`FAIL ${error.message}`);
-        failed = true;
+        console.error(`  FAIL ${error.message}`);
+        failures.push(name);
+        continue;
+      }
+      try {
+        for (const [i, app] of apps.entries()) {
+          try {
+            await testApp(browser, url, app, LEVELS[i % LEVELS.length], out);
+          } catch (error) {
+            console.error(`  FAIL ${error.message}`);
+            failures.push(`${name}/${app.name}`);
+          }
+        }
+      } finally {
+        await browser.close();
       }
     }
   } finally {
-    child.kill();
     server.close();
   }
-  if (failed) {
+  if (failures.length) {
+    console.error(`failed: ${failures.join(', ')}`);
     process.exitCode = 1;
   } else {
     console.log('all apps OK');

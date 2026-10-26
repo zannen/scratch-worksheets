@@ -57,12 +57,14 @@ uses JavaScript modules, so it must be served over HTTP(S); opening
 
 - `make web-test` serves the page at <http://localhost:8080/> (needs Python 3).
 - `make test` runs the unit tests (needs Node.js).
-- `make e2e-test` makes a worksheet for each app in `apps/` in headless Chromium,
-  checks the blocks, and saves the PDFs in `build/e2e/` (needs Node.js and
-  Chromium; set `CHROMIUM` to use another browser binary). An app is a `.sb3`
-  file or a folder containing `project.json`; its title and instructions come
-  from a Markdown file of the same name, e.g. `apps/RandomWalk.md`, whose first
-  `# ` heading is the title.
+- `make e2e-test` makes a worksheet for each app in `apps/` in headless Chromium
+  and headless Firefox, checks the blocks and the level circle, and saves the PDFs
+  in `build/e2e/<browser>/` (needs Node.js, Chromium, and Firefox with
+  [geckodriver](https://github.com/mozilla/geckodriver)). `make e2e-chromium` and
+  `make e2e-firefox` test one browser. Set `CHROMIUM`, `FIREFOX` or `GECKODRIVER`
+  to use other browser binaries. An app is a `.sb3` file or a folder containing
+  `project.json`; its title and instructions come from a Markdown file of the same
+  name, e.g. `apps/RandomWalk.md`, whose first `# ` heading is the title.
 
 The fixtures in `tests/fixtures/` were made by the original Python version of this
 program, which the web page replaces, so the tests check the page splits blocks,
