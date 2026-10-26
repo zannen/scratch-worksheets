@@ -8,7 +8,7 @@ import {App, projectVariables, sections} from './sb3.js';
 import {seededRandom, shuffled, splitProject} from './splitter.js';
 
 const DEFAULT_INSTRUCTIONS =
-  'Cut out the blocks. Then put them together in the right order to make the program.';
+  'Put the blocks together in the right order to make the program.';
 const DEFAULT_INSTRUCTIONS_SPRITES = ' The blocks for each sprite are grouped together under its name.';
 
 const $ = id => document.getElementById(id);
