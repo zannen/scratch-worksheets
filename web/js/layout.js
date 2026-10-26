@@ -13,14 +13,25 @@ const CONTENT_HEIGHT = (297 - 2 * 15) * PX_PER_MM;
  *
  * @param groups list of {heading, picture, blocks: [{svg, width, height}]}; heading
  *   and picture may be null
+ * @param level shown in a circle in the top-right corner, if not empty
  */
-export function fillWorksheet(content, {title, instructionsHtml, groups, scale}) {
+export function fillWorksheet(content, {title, level, instructionsHtml, groups, scale}) {
   const h1 = document.createElement('h1');
   h1.textContent = title;
   const instructions = document.createElement('div');
   instructions.className = 'instructions';
   instructions.innerHTML = instructionsHtml; // made by markdown.js, which escapes the text
   content.replaceChildren(h1, instructions);
+  if (level) {
+    const badge = document.createElement('div');
+    badge.className = 'level';
+    if ([...level].length > 2) {
+      badge.classList.add(`chars-${Math.min([...level].length, 4)}`);
+    }
+    badge.setAttribute('aria-label', `Level ${level}`);
+    badge.textContent = level;
+    content.prepend(badge);
+  }
 
   for (const {heading, picture, blocks} of groups) {
     const section = document.createElement('section');

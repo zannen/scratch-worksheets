@@ -15,6 +15,7 @@ const $ = id => document.getElementById(id);
 const fileInput = $('file');
 const drop = $('drop');
 const titleInput = $('title');
+const levelInput = $('level');
 const instructionsInput = $('instructions');
 const seedInput = $('seed');
 const scaleSelect = $('scale');
@@ -111,6 +112,7 @@ function update() {
     sheet.hidden = false;
     const {scale, pages} = await layoutWorksheet(content, {
       title: titleInput.value.trim() || current.name,
+      level: levelInput.value.trim(),
       instructionsHtml: instructions ? markdownToHtml(instructions) : paragraph(defaultInstructions()),
       groups,
     }, Number(scaleSelect.value) || null);
@@ -152,6 +154,7 @@ document.addEventListener('drop', event => {
 });
 
 titleInput.addEventListener('input', updateSoon);
+levelInput.addEventListener('input', updateSoon);
 instructionsInput.addEventListener('input', updateSoon);
 seedInput.addEventListener('input', updateSoon);
 scaleSelect.addEventListener('change', update);

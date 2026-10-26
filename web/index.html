@@ -25,6 +25,9 @@
   textarea { min-height: 7em; resize: vertical; }
   .row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 20px; margin-bottom: 12px; }
   .row input[type=number] { width: 8em; }
+  .row input[type=text] { margin-bottom: 0; }
+  .row .grow { flex: 1; }
+  .row input.level-input { width: 6em; }
   button { font: inherit; padding: 7px 14px; border-radius: 4px; border: 1px solid var(--border);
            background: #fff; cursor: pointer; }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: bold; }
@@ -50,7 +53,13 @@
   .instructions ul, .instructions ol { padding-left: 7mm; }
   .instructions h3 { font-size: 15pt; margin: 3mm 0 1mm; }
   .instructions code { font-family: inherit; font-weight: bold; }
-  #content section { margin-top: 8mm; }
+  /* The level, in a circle in the top-right corner; the title and instructions wrap around it. */
+  .level { float: right; width: 20mm; height: 20mm; margin: 0 0 2mm 4mm; border: 0.8mm solid #000;
+           border-radius: 50%; display: flex; align-items: center; justify-content: center;
+           font-size: 22pt; font-weight: bold; line-height: 1; white-space: nowrap; }
+  .level.chars-3 { font-size: 17pt; }
+  .level.chars-4 { font-size: 13pt; }
+  #content section { margin-top: 8mm; clear: both; }
   #content h2 { display: flex; align-items: center; gap: 4mm; font-size: 17pt; margin: 0 0 4mm;
                 break-after: avoid; }
   #content h2 img { height: 18mm; width: 18mm; object-fit: contain; }
@@ -84,8 +93,16 @@
     <input type="file" id="file" accept=".sb3">
   </label>
 
-  <label class="field" for="title">Title <span class="field-hint">(default: the app’s name)</span></label>
-  <input type="text" id="title" autocomplete="off">
+  <div class="row">
+    <div class="grow">
+      <label class="field" for="title">Title <span class="field-hint">(default: the app’s name)</span></label>
+      <input type="text" id="title" autocomplete="off">
+    </div>
+    <div>
+      <label class="field" for="level">Level <span class="field-hint">(optional, e.g. 5B)</span></label>
+      <input type="text" id="level" class="level-input" autocomplete="off" maxlength="4">
+    </div>
+  </div>
 
   <label class="field" for="instructions">Instructions
     <span class="field-hint">— Markdown: **bold**, *italic*, “- ” or “1. ” lists, “## ” headings</span></label>

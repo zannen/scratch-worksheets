@@ -181,7 +181,10 @@ function pdfPageCount(bytes) {
 
 // --- The test ---------------------------------------------------------------
 
-async function testApp(devtools, url, {name, bytes}) {
+// Levels to show on the worksheets, to try one, two and three characters.
+const LEVELS = ['5B', '7', '10A'];
+
+async function testApp(devtools, url, {name, bytes}, level) {
   const page = await openPage(devtools, url);
   await page.send('Page.enable');
   await waitFor(page.evaluate, `document.readyState === 'complete' && !!document.getElementById('file')`, 'the page');
@@ -190,6 +193,7 @@ async function testApp(devtools, url, {name, bytes}) {
   await page.evaluate(`(() => {
     document.getElementById('title').value = ${JSON.stringify(notes.title)};
     document.getElementById('instructions').value = ${JSON.stringify(notes.instructions)};
+    document.getElementById('level').value = ${JSON.stringify(level)};
     const bytes = Uint8Array.from(atob(${JSON.stringify(Buffer.from(bytes).toString('base64'))}), c => c.charCodeAt(0));
     const transfer = new DataTransfer();
     transfer.items.add(new File([bytes], ${JSON.stringify(name + '.sb3')}));
@@ -219,6 +223,16 @@ async function testApp(devtools, url, {name, bytes}) {
     return sizes;
   })()`;
   const sizeCheck = checkSizes(name, await page.evaluate(sizesAt100));
+  const badge = await page.evaluate(`(() => {
+    const badge = document.querySelector('#content .level');
+    if (!badge) return null;
+    const box = badge.getBoundingClientRect();
+    const content = document.getElementById('content').getBoundingClientRect();
+    return {text: badge.textContent, top: box.top - content.top, right: content.right - box.right};
+  })()`);
+  if (!badge || badge.text !== level || Math.abs(badge.top) > 1 || Math.abs(badge.right) > 1) {
+    throw new Error(`${name}: level ${level} is not in the top-right corner: ${JSON.stringify(badge)}`);
+  }
   const finalStatus = await page.evaluate(`document.getElementById('status').textContent`);
 
   const {data} = await page.send('Page.printToPDF', {preferCSSPageSize: true, printBackground: true});
@@ -266,9 +280,9 @@ async function main() {
   try {
     const devtools = new DevTools(devtoolsUrl);
     await devtools.opened;
-    for (const app of apps) {
+    for (const [i, app] of apps.entries()) {
       try {
-        await testApp(devtools, url, app);
+        await testApp(devtools, url, app, LEVELS[i % LEVELS.length]);
       } catch (error) {
         console.error(`FAIL ${error.message}`);
         failed = true;

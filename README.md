@@ -13,7 +13,9 @@ page can be hosted as plain static files.
 
    ![Scratch's File menu, with "Save to your computer" highlighted](readme_images/scratch-save-to-computer.png)
 1. Open the web page and choose (or drop) the `sb3` file.
-1. Type a title (the default is the app's name) and the instructions. The
+1. Type a title (the default is the app's name), an optional level (e.g. `1`,
+   `5B` or `10`, up to 4 characters, shown in a circle in the top-right corner of
+   the worksheet), and the instructions. The
    instructions can use Markdown: paragraphs, `-` or `1.` lists, `**bold**`,
    `*italic*` and `## headings`.
 1. Optionally, use **Shuffle again** for a different order of blocks (the same
