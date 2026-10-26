@@ -1,4 +1,4 @@
 __pycache__
 apps/*.sb3
 build/
-worksheets/*.pdf
+worksheets/

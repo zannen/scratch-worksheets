@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scratch worksheets</title>
+<style>
+  /* --- The page around the worksheet ------------------------------------- */
+  :root { --accent: #855cd6; --border: #c9c9d6; --muted: #575e75; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e9eef2; color: #222;
+         font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  .controls { max-width: 210mm; margin: 0 auto; padding: 20px 16px 8px; }
+  .controls h1 { margin: 0 0 4px; font-size: 26px; }
+  .controls p { margin: 0 0 12px; color: var(--muted); line-height: 1.4; }
+  .drop { display: block; border: 2px dashed var(--border); border-radius: 8px; padding: 18px;
+          text-align: center; background: #fff; cursor: pointer; margin-bottom: 14px; }
+  .drop.dragging, .drop:focus-within { border-color: var(--accent); }
+  .drop input { display: block; margin: 8px auto 0; }
+  label.field { display: block; font-weight: bold; margin: 0 0 4px; }
+  .field-hint { font-weight: normal; color: var(--muted); font-size: 13px; }
+  input[type=text], textarea, select, input[type=number] {
+    font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: #fff; }
+  input[type=text], textarea { width: 100%; margin-bottom: 12px; }
+  textarea { min-height: 7em; resize: vertical; }
+  .row { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 20px; margin-bottom: 12px; }
+  .row input[type=number] { width: 8em; }
+  button { font: inherit; padding: 7px 14px; border-radius: 4px; border: 1px solid var(--border);
+           background: #fff; cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: bold; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #status { min-height: 1.4em; margin: 0 0 4px; }
+  #status.error { color: #b00020; white-space: pre-wrap; }
+  .preview { padding: 8px 16px 40px; overflow-x: auto; }
+  /* scratch-blocks draws on this, off-screen, before the blocks are copied to the worksheet. */
+  .render-workspace { position: absolute; left: -10000px; top: 0; width: 2000px; height: 2000px; }
+  /* Match the font Scratch uses, so blocks are measured as they will be printed. */
+  .render-workspace .blocklyText { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+                                   font-size: 12pt; font-weight: 500; }
+
+  /* --- The worksheet: an A4 page with 15mm margins ------------------------ */
+  #sheet { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm; background: #fff; color: #000;
+           box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+           font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  #sheet[hidden] { display: none; }
+  #content { display: flow-root; }
+  #content h1 { font-size: 26pt; margin: 0 0 3mm; }
+  .instructions { font-size: 14pt; margin: 0 0 4mm; line-height: 1.4; }
+  .instructions p, .instructions ul, .instructions ol { margin: 0 0 2mm; }
+  .instructions ul, .instructions ol { padding-left: 7mm; }
+  .instructions h3 { font-size: 15pt; margin: 3mm 0 1mm; }
+  .instructions code { font-family: inherit; font-weight: bold; }
+  #content section { margin-top: 8mm; }
+  #content h2 { display: flex; align-items: center; gap: 4mm; font-size: 17pt; margin: 0 0 4mm;
+                break-after: avoid; }
+  #content h2 img { height: 18mm; width: 18mm; object-fit: contain; }
+  .blocks { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4.5mm 5.5mm; }
+  .blocks svg { display: block; break-inside: avoid; }
+
+  /* --- Printing: only the worksheet ---------------------------------------- */
+  /* No page margin leaves no room for the browser's headers and footers; the sheet's
+     padding is the margin instead, repeated on every page. */
+  @page { size: A4; margin: 0; }
+  @media print {
+    body { background: #fff; }
+    .controls, .render-workspace { display: none !important; }
+    .preview { padding: 0; overflow: visible; }
+    #sheet { margin: 0; min-height: 0; box-shadow: none;
+             -webkit-box-decoration-break: clone; box-decoration-break: clone;
+             -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+<main class="controls">
+  <h1>Scratch worksheets</h1>
+  <p>Make a printable “put the blocks in order” worksheet from a finished Scratch app. Each
+    script is split into single blocks and shuffled; each sprite’s blocks stay together under
+    its name and picture. In Scratch, use <b>File › Save to your computer</b> to get the
+    <code>.sb3</code> file. Your file stays on your computer: nothing is uploaded.</p>
+
+  <label class="drop" id="drop">
+    <span id="drop-text">Choose or drop a Scratch file (<code>.sb3</code>)</span>
+    <input type="file" id="file" accept=".sb3">
+  </label>
+
+  <label class="field" for="title">Title <span class="field-hint">(default: the app’s name)</span></label>
+  <input type="text" id="title" autocomplete="off">
+
+  <label class="field" for="instructions">Instructions
+    <span class="field-hint">— Markdown: **bold**, *italic*, “- ” or “1. ” lists, “## ” headings</span></label>
+  <textarea id="instructions"></textarea>
+
+  <div class="row">
+    <div>
+      <label class="field" for="seed">Order <span class="field-hint">(the same number gives the same order)</span></label>
+      <input type="number" id="seed" min="0" step="1">
+      <button type="button" id="shuffle">Shuffle again</button>
+    </div>
+    <div>
+      <label class="field" for="scale">Block size</label>
+      <select id="scale">
+        <option value="">Largest that fits on one page</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="row">
+    <button type="button" class="primary" id="print" disabled>Download PDF…</button>
+    <span class="field-hint">In the print window, choose <b>Save as PDF</b> as the destination.</span>
+  </div>
+  <p id="status" role="status"></p>
+</main>
+
+<div class="preview">
+  <article id="sheet" hidden><div id="content"></div></article>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
