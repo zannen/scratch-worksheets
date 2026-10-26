@@ -21,7 +21,7 @@ const ASSETS = 'https://assets.scratch.mit.edu/internalapi/asset/';
 
 /**
  * The project number from a project's link (e.g.
- * https://scratch.mit.edu/projects/1394156249/editor) or the number itself.
+ * https://scratch.mit.edu/projects/1234567890/editor) or the number itself.
  * Returns null if there is no project number.
  */
 export function projectId(text) {

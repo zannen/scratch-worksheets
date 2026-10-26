@@ -138,7 +138,7 @@ function loadLink() {
   }
   const id = projectId(text);
   if (!id) {
-    showStatus(`“${text}” is not a link to a Scratch project, like https://scratch.mit.edu/projects/1394156249`, true);
+    showStatus(`“${text}” is not a link to a Scratch project, like https://scratch.mit.edu/projects/1234567890`, true);
     return;
   }
   const apiProxy = new URL(API_PROXY, document.baseURI).href;

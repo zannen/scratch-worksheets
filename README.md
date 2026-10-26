@@ -12,7 +12,7 @@ is plain static files, plus a small reverse proxy for the Scratch API (see
 
 1. Open the web page, and choose the app:
    - **Scratch project link:** paste the link of a shared project, e.g.
-     `https://scratch.mit.edu/projects/1394156249`, or just its number. The
+     `https://scratch.mit.edu/projects/1234567890`, or just its number. The
      project is downloaded from the Scratch website.
    - **Upload a file:** for a project that is not shared, save it to your
      computer, then choose (or drop) the `sb3` file:
