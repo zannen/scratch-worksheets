@@ -13,8 +13,17 @@
   .controls { max-width: 210mm; margin: 0 auto; padding: 20px 16px 8px; }
   .controls h1 { margin: 0 0 4px; font-size: 26px; }
   .controls p { margin: 0 0 12px; color: var(--muted); line-height: 1.4; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs [role=tab] { border-radius: 6px 6px 0 0; border-bottom: none; background: #dfe3ea; color: var(--muted); }
+  .tabs [role=tab][aria-selected=true] { background: #fff; color: #222; font-weight: bold; }
+  .tab-panel { background: #fff; border: 1px solid var(--border); border-radius: 0 8px 8px 8px;
+               padding: 14px; margin-bottom: 14px; }
+  .tab-panel[hidden] { display: none; }
+  .controls .tab-panel .field-hint { margin: 8px 0 0; }
+  .link-row { display: flex; gap: 8px; }
+  .link-row input[type=text] { flex: 1; margin: 0; }
   .drop { display: block; border: 2px dashed var(--border); border-radius: 8px; padding: 18px;
-          text-align: center; background: #fff; cursor: pointer; margin-bottom: 14px; }
+          text-align: center; background: #fff; cursor: pointer; }
   .drop.dragging, .drop:focus-within { border-color: var(--accent); }
   .drop input { display: block; margin: 8px auto 0; }
   label.field { display: block; font-weight: bold; margin: 0 0 4px; }
@@ -85,17 +94,32 @@
   <h1>Scratch worksheets</h1>
   <p>Make a printable “put the blocks in order” worksheet from a finished Scratch app. Each
     script is split into single blocks and shuffled; each sprite’s blocks stay together under
-    its name and picture. In Scratch, use <b>File › Save to your computer</b> to get the
-    <code>.sb3</code> file. Your file stays on your computer: nothing is uploaded.</p>
+    its name and picture.</p>
 
-  <label class="drop" id="drop">
-    <span id="drop-text">Choose or drop a Scratch file (<code>.sb3</code>)</span>
-    <input type="file" id="file" accept=".sb3">
-  </label>
+  <div class="tabs" role="tablist" aria-label="Where the Scratch project comes from">
+    <button type="button" role="tab" id="tab-link" aria-controls="panel-link" aria-selected="true">Scratch project link</button>
+    <button type="button" role="tab" id="tab-file" aria-controls="panel-file" aria-selected="false" tabindex="-1">Upload a file</button>
+  </div>
+  <div class="tab-panel" role="tabpanel" id="panel-link" aria-labelledby="tab-link">
+    <form id="link-form" class="link-row">
+      <input type="text" id="link" autocomplete="off" spellcheck="false" aria-label="Scratch project link"
+             placeholder="https://scratch.mit.edu/projects/1394156249">
+      <button type="submit" id="link-load">Load</button>
+    </form>
+    <p class="field-hint">Paste the link of a <b>shared</b> project on the Scratch website (or just its number).</p>
+  </div>
+  <div class="tab-panel" role="tabpanel" id="panel-file" aria-labelledby="tab-file" hidden>
+    <label class="drop" id="drop">
+      <span id="drop-text">Choose or drop a Scratch file (<code>.sb3</code>)</span>
+      <input type="file" id="file" accept=".sb3">
+    </label>
+    <p class="field-hint">For projects that are not shared: in Scratch, use <b>File › Save to your
+      computer</b> to get the <code>.sb3</code> file. It stays on your computer: nothing is uploaded.</p>
+  </div>
 
   <div class="row">
     <div class="grow">
-      <label class="field" for="title">Title <span class="field-hint">(default: the app’s name)</span></label>
+      <label class="field" for="title">Title <span class="field-hint">(default: the project’s title or file name)</span></label>
       <input type="text" id="title" autocomplete="off">
     </div>
     <div>

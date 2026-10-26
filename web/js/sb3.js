@@ -4,17 +4,31 @@ import {unzipSync, strFromU8} from '../vendor/fflate-0.8.3.mjs';
 
 const MIME_TYPES = {svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg'};
 
-/** A Scratch project read from the bytes of a .sb3 file. */
+/** A Scratch project: its project.json and asset files (costumes and so on). */
 export class App {
-  constructor(name, bytes) {
+  /**
+   * @param files object of file name -> bytes, as in a .sb3 file, including project.json
+   */
+  constructor(name, files) {
     this.name = name;
+    this.files = files;
+    this.prefix = this.archivePrefix();
     try {
-      this.files = unzipSync(bytes);
+      this.project = JSON.parse(strFromU8(this.files[this.prefix + 'project.json']));
+    } catch (error) {
+      throw new Error(`the project could not be read: ${error.message}`);
+    }
+  }
+
+  /** Read a project from the bytes of a .sb3 file. */
+  static fromSb3(name, bytes) {
+    let files;
+    try {
+      files = unzipSync(bytes);
     } catch (error) {
       throw new Error(`the file could not be read (is it a Scratch .sb3 file?): ${error.message}`);
     }
-    this.prefix = this.archivePrefix();
-    this.project = JSON.parse(strFromU8(this.files[this.prefix + 'project.json']));
+    return new App(name, files);
   }
 
   /** Folder holding project.json in the zip: "" for files saved by Scratch, or e.g.

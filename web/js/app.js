@@ -1,10 +1,12 @@
-// The worksheet page: read a .sb3 file, split and draw its blocks, lay out the
-// worksheet, and print it (the browser's print window can save it as a PDF).
+// The worksheet page: load a Scratch project (from the Scratch website, or a .sb3
+// file), split and draw its blocks, lay out the worksheet, and print it (the
+// browser's print window can save it as a PDF).
 
 import {AUTO_SCALES, layoutWorksheet} from './layout.js';
 import {markdownToHtml, paragraph} from './markdown.js';
 import {renderBlocks} from './render.js';
 import {App, projectVariables, sections} from './sb3.js';
+import {API_PROXY, loadProject, projectId} from './scratchsite.js';
 import {seededRandom, shuffled, splitProject} from './splitter.js';
 
 const DEFAULT_INSTRUCTIONS =
@@ -13,6 +15,7 @@ const DEFAULT_INSTRUCTIONS_SPRITES = ' The blocks for each sprite are grouped to
 
 const $ = id => document.getElementById(id);
 const fileInput = $('file');
+const linkInput = $('link');
 const drop = $('drop');
 const titleInput = $('title');
 const levelInput = $('level');
@@ -45,9 +48,8 @@ function defaultInstructions() {
   return DEFAULT_INSTRUCTIONS + (sprites ? DEFAULT_INSTRUCTIONS_SPRITES : '');
 }
 
-async function readApp(file) {
-  const name = file.name.replace(/\.sb3$/i, '');
-  const app = new App(name, new Uint8Array(await file.arrayBuffer()));
+/** Split and draw an app's blocks. */
+async function prepareApp(app) {
   const targets = sections(app.project);
   if (!targets.length) {
     throw new Error('the app has no blocks');
@@ -60,7 +62,7 @@ async function readApp(file) {
   }
   const showHeadings = targets.length > 1 || !targets[0].isStage;
   return {
-    name,
+    name: app.name,
     warnings,
     targets: targets.map((target, i) => ({
       heading: showHeadings ? target.name : null,
@@ -70,24 +72,59 @@ async function readApp(file) {
   };
 }
 
-async function loadFile(file) {
-  if (!file) {
-    return;
-  }
+let loads = 0;
+
+/**
+ * Load an app, replacing the current one.
+ *
+ * @param description what is being loaded, for messages
+ * @param readApp async function returning an App
+ */
+async function load(description, readApp) {
+  const thisLoad = ++loads;
   current = null;
   printButton.disabled = true;
   sheet.hidden = true;
-  $('drop-text').textContent = file.name;
-  showStatus(`Reading ${file.name}…`);
+  showStatus(`Loading ${description}…`);
+  let app;
   try {
-    current = await readApp(file);
+    app = await prepareApp(await readApp());
   } catch (error) {
     console.error(error);
-    showStatus(`${file.name}: ${error.message}`, true);
+    if (thisLoad === loads) {
+      showStatus(`${description}: ${error.message}`, true);
+    }
     return;
   }
+  if (thisLoad !== loads) {
+    return; // something else was loaded meanwhile
+  }
+  current = app;
   newSeed();
   await update();
+}
+
+function loadFile(file) {
+  if (!file) {
+    return;
+  }
+  $('drop-text').textContent = file.name;
+  const name = file.name.replace(/\.sb3$/i, '');
+  return load(file.name, async () => App.fromSb3(name, new Uint8Array(await file.arrayBuffer())));
+}
+
+function loadLink() {
+  const text = linkInput.value.trim();
+  if (!text) {
+    return;
+  }
+  const id = projectId(text);
+  if (!id) {
+    showStatus(`“${text}” is not a link to a Scratch project, like https://scratch.mit.edu/projects/1394156249`, true);
+    return;
+  }
+  const apiProxy = new URL(API_PROXY, document.baseURI).href;
+  return load(`Scratch project ${id}`, () => loadProject(id, {apiProxy}));
 }
 
 let updating = Promise.resolve();
@@ -136,6 +173,51 @@ function updateSoon() {
   typingTimer = setTimeout(update, 250);
 }
 
+// --- Choosing the project: tabs for a link or a file ---------------------------
+
+const tabs = [...document.querySelectorAll('[role=tab]')];
+
+function selectTab(tab, focus = false) {
+  for (const other of tabs) {
+    const selected = other === tab;
+    other.setAttribute('aria-selected', selected);
+    other.tabIndex = selected ? 0 : -1;
+    $(other.getAttribute('aria-controls')).hidden = !selected;
+  }
+  if (focus) {
+    tab.focus();
+  }
+  try {
+    localStorage.setItem('scratch-worksheets-tab', tab.id);
+  } catch {
+    // storage may be unavailable; the first tab is used next time
+  }
+}
+
+for (const tab of tabs) {
+  tab.addEventListener('click', () => selectTab(tab));
+  tab.addEventListener('keydown', event => {
+    const step = {ArrowRight: 1, ArrowLeft: -1}[event.key];
+    if (step) {
+      selectTab(tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length], true);
+    }
+  });
+}
+try {
+  const saved = $(localStorage.getItem('scratch-worksheets-tab') || '');
+  if (tabs.includes(saved)) {
+    selectTab(saved);
+  }
+} catch {
+  // storage may be unavailable
+}
+
+$('link-form').addEventListener('submit', event => {
+  event.preventDefault();
+  loadLink();
+});
+linkInput.addEventListener('paste', () => setTimeout(loadLink));
+
 fileInput.addEventListener('change', () => {
   loadFile(fileInput.files[0]);
 });
@@ -150,8 +232,14 @@ for (const type of ['dragleave', 'drop']) {
 }
 document.addEventListener('drop', event => {
   event.preventDefault();
-  loadFile(event.dataTransfer.files[0]);
+  const file = event.dataTransfer.files[0];
+  if (file) {
+    selectTab($('tab-file'));
+    loadFile(file);
+  }
 });
+
+// --- Settings -------------------------------------------------------------------
 
 titleInput.addEventListener('input', updateSoon);
 levelInput.addEventListener('input', updateSoon);
